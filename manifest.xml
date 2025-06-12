@@ -1,0 +1,6 @@
+<manifest>
+    <name>stackconsolidator</name>
+    <author>Vafilor</author>
+    <version>1.0</version>
+    <description>Consolidates stackable items across all inventories</description>
+</manifest>
