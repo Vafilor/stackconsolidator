@@ -112,9 +112,9 @@ function stack_items(dry_run)
 
             local move_count = math.min(donor.count, target.max_stack - target.count)
 
-            inventory:move(donor, move_count, target.bag)
+            local moved = inventory:move(donor, move_count, target.bag)
 
-            if not dry_run then
+            if not dry_run and moved then
                 coroutine.sleep(1)
             end
             target.count = target.count + move_count

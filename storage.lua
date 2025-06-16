@@ -14,6 +14,17 @@ local inventories = {
     { id = 10, name = 'safe2' }
 }
 
+function message(text, to_log)
+    if (text == nil or #text < 1) then
+        return
+    end
+
+    if (to_log) then
+        log(text)
+    else
+        windower.add_to_chat(207, _addon.name .. ": " .. text)
+    end
+end
 
 function get_all_stackable_items()
     local all = {}
@@ -135,11 +146,17 @@ function Storage:move(item, count, bag_id)
     -- This requires some checking to make sure we CAN do it, and then moving inventory around to do it.
     if item.bag == INVENTORY_ID then
         if self:has_free_slot(bag_id) then
-            print(string.format("Moving %d %s from %s to %s", count, item_name, item.bag_name, self:get_bag_name(bag_id)))
+            message(string.format("Moving %d %s from %s to %s", count, item_name, item.bag_name,
+                self:get_bag_name(bag_id)))
             self:perform_move(item, count, bag_id)
-            return
+            return true
+        else
+            message(string.format("Bag full: unable to move %d %s from %s to %s", count, item_name, item.bag_name,
+                self:get_bag_name(bag_id)))
         end
     end
+
+    return false
 end
 
 --- Checks if a bag has at least one free slot available.
