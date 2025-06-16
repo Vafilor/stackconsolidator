@@ -127,10 +127,6 @@ function Storage:perform_move(item, count, bag_id)
 end
 
 function Storage:move(item, count, bag_id)
-    if self.limit > 0 then
-        return
-    end
-
     local item_name = self:get_item_name(item.item_id)
 
     -- TODO support moving between other storages.
@@ -141,10 +137,6 @@ function Storage:move(item, count, bag_id)
         if self:has_free_slot(bag_id) then
             print(string.format("Moving %d %s from %s to %s", count, item_name, item.bag_name, self:get_bag_name(bag_id)))
             self:perform_move(item, count, bag_id)
-            if not self.dry_run then
-                -- For testing I'm limiting the moves to 1 at a time.
-                self.limit = self.limit + 1
-            end
             return
         end
     end
