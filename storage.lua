@@ -69,6 +69,7 @@ function Storage:new(dry_run)
         },
         limit = 0,
         sleep_between_move_and_sort = 1,
+        sleep_after_sort = 1,
         dry_run = dry_run
     }
 
@@ -132,6 +133,8 @@ function Storage:perform_move(item, count, bag_id)
     })
 
     packets.inject(packet)
+
+    coroutine.sleep(self.sleep_after_sort)
 
     self:load_counts(item.bag)
     self:load_counts(bag_id)

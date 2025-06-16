@@ -117,6 +117,7 @@ function stack_items(dry_run)
             if not dry_run and moved then
                 coroutine.sleep(1)
             end
+
             target.count = target.count + move_count
             donor.count = donor.count - move_count
 
