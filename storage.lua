@@ -11,7 +11,7 @@ local inventories = {
     { id = 5,  name = 'satchel' },
     { id = 6,  name = 'sack' },
     { id = 7,  name = 'case' },
-    { id = 10, name = 'safe2' }
+    { id = 9, name = 'safe2' }
 }
 
 function message(text, to_log)
@@ -26,7 +26,43 @@ function message(text, to_log)
     end
 end
 
-function get_all_stackable_items()
+Storage = {}
+
+function Storage:new(dry_run)
+    local obj = {
+        inventory = {},
+        limit = 0,
+        sleep_between_move_and_sort = 1,
+        sleep_after_sort = 1,
+        dry_run = dry_run
+    }
+
+    for _, inv in pairs(inventories) do
+        obj.inventory[inv.id] = {id=inv.id, name=inv.name}
+        
+        local bag = windower.ffxi.get_items(inv.name)
+        if bag then
+            obj.inventory[inv.id].count = bag.count
+            obj.inventory[inv.id].max = bag.max
+        end
+    end
+
+    setmetatable(obj, self)
+    self.__index = self
+
+    return obj
+end
+
+function Storage:load_counts(inventory_id)
+    local inv = self.inventory[inventory_id]
+    local bag = windower.ffxi.get_items(inv.name)
+    if bag then
+        inv.count = bag.count
+        inv.max = bag.max
+    end
+end
+
+function Storage:get_all_stackable_items()
     local all = {}
     for _, inv in ipairs(inventories) do
         local bag = windower.ffxi.get_items(inv.name)
@@ -51,49 +87,6 @@ function get_all_stackable_items()
         end
     end
     return all
-end
-
-Storage = {}
-
-function Storage:new(dry_run)
-    local obj = {
-        inventory = {
-            [0] = { id = 0, name = 'inventory' },
-            [1] = { id = 1, name = 'safe' },
-            [2] = { id = 2, name = 'storage' },
-            [4] = { id = 4, name = 'locker' },
-            [5] = { id = 5, name = 'satchel' },
-            [6] = { id = 6, name = 'sack' },
-            [7] = { id = 7, name = 'case' },
-            [10] = { id = 10, name = 'safe2' }
-        },
-        limit = 0,
-        sleep_between_move_and_sort = 1,
-        sleep_after_sort = 1,
-        dry_run = dry_run
-    }
-
-    for _, inv in pairs(obj.inventory) do
-        local bag = windower.ffxi.get_items(inv.name)
-        if bag then
-            inv.count = bag.count
-            inv.max = bag.max
-        end
-    end
-
-    setmetatable(obj, self)
-    self.__index = self
-
-    return obj
-end
-
-function Storage:load_counts(inventory_id)
-    local inv = self.inventory[inventory_id]
-    local bag = windower.ffxi.get_items(inv.name)
-    if bag then
-        inv.count = bag.count
-        inv.max = bag.max
-    end
 end
 
 function Storage:get_bag_name(bag_id)
