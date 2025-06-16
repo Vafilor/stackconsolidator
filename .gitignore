@@ -1,0 +1,5 @@
+#ignored folders: 
+/data/
+
+#ignored files:
+lua.log

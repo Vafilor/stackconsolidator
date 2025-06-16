@@ -1,33 +1,35 @@
 _addon.name = 'StackConsolidator'
 _addon.author = 'Vafilor'
 _addon.version = '1.1'
-_addon.commands = {'stack'}
+_addon.commands = { 'stack' }
 _addon.windower = '4'
 
 res_items = require('resources').items
 packets = require('packets')
+storage = require("storage")
+require("logger")
 
 local inventories = {
-    {id=0, name='inventory'},
-    {id=1, name='safe'},
-    {id=2, name='storage'},
-    {id=4, name='locker'},
-    {id=5, name='satchel'},
-    {id=6, name='sack'},
-    {id=7, name='case'},
-    {id=10, name='safe2'}
+    { id = 0,  name = 'inventory' },
+    { id = 1,  name = 'safe' },
+    { id = 2,  name = 'storage' },
+    { id = 4,  name = 'locker' },
+    { id = 5,  name = 'satchel' },
+    { id = 6,  name = 'sack' },
+    { id = 7,  name = 'case' },
+    { id = 10, name = 'safe2' }
 }
 
-function message(text, to_log) 
-	if (text == nil or #text < 1) then
-		return
-	end
+function message(text, to_log)
+    if (text == nil or #text < 1) then
+        return
+    end
 
-	if (to_log) then
-		log(text)
-	else
-		windower.add_to_chat(207, _addon.name..": "..text)
-	end
+    if (to_log) then
+        log(text)
+    else
+        windower.add_to_chat(207, _addon.name .. ": " .. text)
+    end
 end
 
 function get_all_stackable_items()
@@ -78,40 +80,43 @@ function find_merge_candidates(group)
     return partials
 end
 
-function stack_items()
+-- The part moves all items to maximze stacks.
+-- If you have 50 iron arrows in mog safe and 30 in mog safe 2, and 55 in inventory,
+-- It will move 49 to mog safe and 6 to mog safe 2.
+-- It does not attempt to organize like items together.
+-- However, it does skip moving things to the player inventory.
+function stack_items(dry_run)
+    local inventory = storage:new(dry_run)
+
     message("Starting stacking items")
     local all_items = get_all_stackable_items()
-    message("Total stackable items found: " .. tostring(#all_items))
     local grouped = group_items_by_id(all_items)
 
-    local move_log = {}
-
-    for item_id, group in pairs(grouped) do
+    for _, group in pairs(grouped) do
         local partials = find_merge_candidates(group)
+        table.sort(partials, function(a, b)
+            -- Put player inventory last
+            if a.bag == 0 then
+                return false
+            elseif b.bag == 0 then
+                return true
+            end
+
+            return a.count > b.count
+        end)
+
 
         while #partials > 1 do
-            table.sort(partials, function(a, b) return a.count > b.count end)
             local target = table.remove(partials, 1)
             local donor = table.remove(partials)
 
             local move_count = math.min(donor.count, target.max_stack - target.count)
-            local item_name = res_items[item_id] and res_items[item_id].name or ("ItemID " .. tostring(item_id))
 
-            message(string.format("Moving %d of %s from %s to %s",
-                move_count, item_name, donor.bag_name, target.bag_name))
+            inventory:move(donor, move_count, target.bag)
 
-            -- windower.packets.inject_outgoing(0x29, packets.new('outgoing', 0x29, {
-            --     Count = move_count,
-            --     From_Bag = donor.bag,
-            --     From_Slot = donor.slot,
-            --     To_Bag = target.bag,
-            --     To_Slot = target.slot
-            -- }))
-
-            table.insert(move_log, string.format("%s: %d from %s to %s",
-                item_name, move_count, donor.bag_name, target.bag_name))
-
-            coroutine.sleep(0.2)
+            if not dry_run then
+                coroutine.sleep(1)
+            end
             target.count = target.count + move_count
             donor.count = donor.count - move_count
 
@@ -121,15 +126,17 @@ function stack_items()
         end
     end
 
-    log("Consolidation complete. Summary:")
-    for _, entry in ipairs(move_log) do
-        log("  - " .. entry)
-    end
+    message("Done")
 end
 
-windower.register_event('addon command', function(cmd)
+windower.register_event('addon command', function(cmd, ...)
     message(cmd)
+
+    local args = T { ... }
+
+    local real_run = args:contains("--run")
+
     if cmd == 'items' then
-        coroutine.schedule(stack_items, 0)
+        stack_items(not real_run)
     end
 end)
