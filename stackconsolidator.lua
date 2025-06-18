@@ -9,6 +9,7 @@ packets = require('packets')
 storage = require("storage")
 require("logger")
 
+
 function message(text, to_log)
     if (text == nil or #text < 1) then
         return
@@ -20,7 +21,6 @@ function message(text, to_log)
         windower.add_to_chat(207, _addon.name .. ": " .. text)
     end
 end
-
 
 function group_items_by_id(items)
     local grouped = {}
@@ -52,6 +52,7 @@ function stack_items(dry_run)
     local inventory = storage:new(dry_run)
 
     message("Starting stacking items")
+    local total_moved = 0
     local all_items = inventory:get_all_stackable_items()
     local grouped = group_items_by_id(all_items)
 
@@ -76,6 +77,9 @@ function stack_items(dry_run)
             local move_count = math.min(donor.count, target.max_stack - target.count)
 
             local moved = inventory:move(donor, move_count, target.bag)
+            if moved then
+                total_moved = total_moved + 1
+            end
 
             if not dry_run and moved then
                 coroutine.sleep(1)
@@ -90,7 +94,16 @@ function stack_items(dry_run)
         end
     end
 
-    message("Done")
+    message(string.format("Done. Moved %d items", total_moved))
+end
+
+function print_stats()
+    message("        Stats      ")
+    local inventory = storage:new(false)
+
+    for _, inv in pairs(inventory.inventory) do
+        message(string.format("%-10s %4s %4s", inv.name, tostring(inv.count), tostring(inv.max)))
+    end
 end
 
 windower.register_event('addon command', function(cmd, ...)
@@ -102,5 +115,7 @@ windower.register_event('addon command', function(cmd, ...)
 
     if cmd == 'items' then
         stack_items(not real_run)
+    elseif cmd == "stats" then
+        print_stats()
     end
 end)
