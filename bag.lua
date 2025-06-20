@@ -1,9 +1,16 @@
-local res_items = require('resources').items
 local constants = require("constants")
 local inventories = constants.inventories
+local Item = require("item")
 
+---@class Bag
+---@field id integer
+---@field name string
+---@field count integer
+---@field max integer
+---@field space integer
 Bag = {}
 
+---@return Bag
 function Bag:new(id)
     local obj = {
         id = id,
@@ -37,31 +44,26 @@ function Bag:reload()
     self.space = bag.max - bag.count
 end
 
+---@return boolean
 function Bag:is(id)
     return self.id == id
 end
 
+---@return boolean
 function Bag:has_free_slot()
     return self.space > 0
 end
 
+---@return Item?
 function Bag:get_item(id)
     local bag = windower.ffxi.get_items(self.name)
     if not bag then
         return nil
     end
 
-    for i, item in ipairs(bag) do
+    for _, item in ipairs(bag) do
         if item.id == id then
-            local res = res_items[item.id]
-            return {
-                item_id = item.id,
-                count = item.count,
-                slot = i,
-                bag = self.id,
-                bag_name = self.name,
-                max_stack = res.stack
-            }
+            return Item:new(item.id, item.slot, item.count, self.id)
         end
     end
 

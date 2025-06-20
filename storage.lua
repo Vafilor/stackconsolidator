@@ -1,28 +1,23 @@
-local res_items = require('resources').items
 require("logger")
+local res_items = require('resources').items
 local packets = require("packets")
 local Bag = require("bag")
+local Item = require("item")
+local message = require("message")
 local constants = require("constants")
 local ids = constants.id
 
 local inventories = constants.inventories
 
 
-
-function message(text, to_log)
-    if (text == nil or #text < 1) then
-        return
-    end
-
-    if (to_log) then
-        log(text)
-    else
-        windower.add_to_chat(207, _addon.name .. ": " .. text)
-    end
-end
-
+---@class Storage
+---@field inventory table<integer, Bag>
+---@field sleep_between_move_and_sort number
+---@field sleep_after_sort number
+---@field dry_run boolean
 Storage = {}
 
+---@return Storage
 function Storage:new(dry_run)
     local obj = {
         inventory = {},
@@ -41,25 +36,20 @@ function Storage:new(dry_run)
     return obj
 end
 
+--- Gets items from all inventories that can be stacked.
+---@return Item[]
 function Storage:get_all_stackable_items()
     local all = {}
     for _, inv in pairs(inventories) do
-        local bag = windower.ffxi.get_items(inv.name)
-        if not bag then
+        local inv_items = windower.ffxi.get_items(inv.name)
+        if not inv_items then
             log("Skipping inaccessible bag: " .. inv.name)
         else
-            for i, item in ipairs(bag) do
+            for _, item in ipairs(inv_items) do
                 if item.id and item.id ~= 0 then
                     local res = res_items[item.id]
                     if res.stack > 1 then
-                        table.insert(all, {
-                            item_id = item.id,
-                            count = item.count,
-                            slot = i,
-                            bag = inv.id,
-                            bag_name = inv.name,
-                            max_stack = res.stack
-                        })
+                        table.insert(all, Item:new(item.id, item.slot, item.count, inv.id))
                     end
                 end
             end
@@ -69,15 +59,12 @@ function Storage:get_all_stackable_items()
     return all
 end
 
-function Storage:get_item_name(item_id)
-    return res_items[item_id] and res_items[item_id].name or ("ItemID " .. tostring(item_id))
-end
-
 function Storage:get_available_space_excluding_bags(excluding_bag_ids)
     if excluding_bag_ids == nil then
         excluding_bag_ids = {}
     end
 
+    -- TODO does lua have a set type?
     local exclude = {}
     for _, bag_id in pairs(excluding_bag_ids) do
         exclude[bag_id] = true
@@ -114,7 +101,11 @@ function Storage:get_cache_bag(exclude_bag_ids, min_space)
     return nil
 end
 
-function Storage:perform_move(item_id, item_slot, count, source_bag, target_bag)
+---@param item_slot integer
+---@param count integer
+---@param source_bag Bag
+---@param target_bag Bag
+function Storage:perform_move(item_slot, count, source_bag, target_bag)
     if self.dry_run then
         return
     end
@@ -145,11 +136,16 @@ function Storage:perform_move(item_id, item_slot, count, source_bag, target_bag)
     target_bag:reload()
 end
 
+--- Attempts to move a number of an item to a bag.
+---
+---@param item Item
+---@param count integer
+---@param bag_id integer
+---@return boolean true if the item was moved, false otherwise.
 function Storage:move(item, count, bag_id)
     local inventory_bag = self.inventory[ids.INVENTORY]
-    local source_bag = self.inventory[item.bag]
+    local source_bag = self.inventory[item.bag_id]
     local target_bag = self.inventory[bag_id]
-    local item_name = self:get_item_name(item.item_id)
 
     -- Skip trying to move to the same bag.
     -- This shouldn't happen, but just in case.
@@ -163,17 +159,17 @@ function Storage:move(item, count, bag_id)
     end
 
 
-    message(string.format("Moving %d %s from %s to %s", count, item_name, source_bag.name, target_bag.name))
+    message(string.format("Moving %d %s from %s to %s", count, item.name, source_bag.name, target_bag.name))
 
     -- Case 2: Move from player's inventory to a different bag.
     if source_bag:is(ids.INVENTORY) then
         if target_bag:has_free_slot() then
-            self:perform_move(item.item_id, item.slot, count, source_bag, target_bag)
+            self:perform_move(item.slot, count, source_bag, target_bag)
             return true
         end
 
         message(string.format("Unable to move %d %s from %s to %s. No space in %s", count,
-            item_name, source_bag.name,
+            item.name, source_bag.name,
             target_bag.name, target_bag.name))
         -- TODO handle this case
         return false
@@ -188,7 +184,7 @@ function Storage:move(item, count, bag_id)
         if not inventory_bag:has_free_slot() then
             message(string.format(
                 "Unable to move %d %s from %s to %s. No space in inventory which acts as an intermediate", count,
-                item_name, source_bag.name,
+                item.name, source_bag.name,
                 target_bag.name))
 
             return false
@@ -196,26 +192,26 @@ function Storage:move(item, count, bag_id)
 
         if not target_bag:has_free_slot() then
             message(string.format("Unable to move %d %s from %s to %s. No space in %s", count,
-                item_name, source_bag.name,
+                item.name, source_bag.name,
                 target_bag.name))
             return false
         end
 
-        self:perform_move(item.item_id, item.slot, count, source_bag, inventory_bag)
+        self:perform_move(item.slot, count, source_bag, inventory_bag)
 
         if self.dry_run then
             return true
         end
 
-        local moved_item = inventory_bag:get_item(item.item_id)
+        local moved_item = inventory_bag:get_item(item.id)
         if moved_item == nil then
             message(string.format("Unable to move %d %s from %s to %s. Unable to find item", count,
-                item_name, inventory_bag.name,
+                item.name, inventory_bag.name,
                 target_bag.name))
             return false
         end
 
-        self:perform_move(moved_item.item_id, moved_item.slot, count, inventory_bag, target_bag)
+        self:perform_move(moved_item.slot, count, inventory_bag, target_bag)
 
         return true
     end

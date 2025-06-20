@@ -4,36 +4,27 @@ _addon.version = '1.1'
 _addon.commands = { 'stack' }
 _addon.windower = '4'
 
-res_items = require('resources').items
-packets = require('packets')
-storage = require("storage")
+local Storage = require("storage")
+local message = require("message")
+
 require("logger")
 
 
-function message(text, to_log)
-    if (text == nil or #text < 1) then
-        return
-    end
-
-    if (to_log) then
-        log(text)
-    else
-        windower.add_to_chat(207, _addon.name .. ": " .. text)
-    end
-end
-
-function group_items_by_id(items)
+---@param items Item[]
+---@return table<integer, Item>
+local function group_items_by_id(items)
     local grouped = {}
     for _, item in ipairs(items) do
-        if not grouped[item.item_id] then
-            grouped[item.item_id] = {}
+        if not grouped[item.id] then
+            grouped[item.id] = {}
         end
-        table.insert(grouped[item.item_id], item)
+        table.insert(grouped[item.id], item)
     end
     return grouped
 end
 
-function find_merge_candidates(group)
+---@return Item[]
+local function find_merge_candidates(group)
     local partials = {}
     for _, item in ipairs(group) do
         if item.count < item.max_stack then
@@ -48,8 +39,8 @@ end
 -- It will move 49 to mog safe and 6 to mog safe 2.
 -- It does not attempt to organize like items together.
 -- However, it does skip moving things to the player inventory.
-function stack_items(dry_run)
-    local inventory = storage:new(dry_run)
+local function stack_items(dry_run)
+    local inventory = Storage:new(dry_run)
 
     message("Starting stacking items")
     local total_moved = 0
@@ -60,9 +51,9 @@ function stack_items(dry_run)
         local partials = find_merge_candidates(group)
         table.sort(partials, function(a, b)
             -- Put player inventory last
-            if a.bag == 0 then
+            if a.bag_id == 0 then
                 return false
-            elseif b.bag == 0 then
+            elseif b.bag_id == 0 then
                 return true
             end
 
@@ -71,12 +62,15 @@ function stack_items(dry_run)
 
 
         while #partials > 1 do
+            ---@type Item
             local target = table.remove(partials, 1)
+
+            ---@type Item
             local donor = table.remove(partials)
 
             local move_count = math.min(donor.count, target.max_stack - target.count)
 
-            local moved = inventory:move(donor, move_count, target.bag)
+            local moved = inventory:move(donor, move_count, target.bag_id)
             if moved then
                 total_moved = total_moved + 1
             end
@@ -97,9 +91,9 @@ function stack_items(dry_run)
     message(string.format("Done. Moved %d items", total_moved))
 end
 
-function print_stats()
+local function print_stats()
     message("        Stats      ")
-    local inventory = storage:new(false)
+    local inventory = Storage:new(false)
 
     for _, inv in pairs(inventory.inventory) do
         message(string.format("%-10s %4s %4s", inv.name, tostring(inv.count), tostring(inv.max)))
