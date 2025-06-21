@@ -9,7 +9,6 @@ local message = require("message")
 
 local Spells = require("spells")
 local Jobs = require("jobs")
-local res = require('resources')
 
 
 require("logger")
@@ -65,7 +64,6 @@ local function stack_items(dry_run)
             return a.count > b.count
         end)
 
-
         while #partials > 1 do
             ---@type Item
             local target = table.remove(partials, 1)
@@ -86,6 +84,10 @@ local function stack_items(dry_run)
 
             target.count = target.count + move_count
             donor.count = donor.count - move_count
+
+            if target.count < target.max_stack then
+                table.insert(partials, 1, target)
+            end
 
             if donor.count > 0 then
                 table.insert(partials, donor)
