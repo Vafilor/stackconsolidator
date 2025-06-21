@@ -20,9 +20,20 @@ local inventories = {
     [id.SAFE_2] = { id = id.SAFE_2, name = 'safe2' }
 }
 
+local equipment = {
+    -- Arranged from equipment menu, starting top left
+    slot_names = {
+        "main", "sub", "range", "ammo",
+        "head", "neck", "left_ear", "right_ear",
+        "body", "hands", "left_ring", "right_ring",
+        "back", "waist", "legs", "feet"
+    }
+}
+
 local constants = {
     id = id,
-    inventories = inventories
+    inventories = inventories,
+    equipment = equipment
 }
 
 return constants

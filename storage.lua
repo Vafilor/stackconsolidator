@@ -20,6 +20,7 @@ Storage = {}
 ---@return Storage
 function Storage:new(dry_run)
     local obj = {
+        -- TODO rename these to bags
         inventory = {},
         sleep_between_move_and_sort = 1,
         sleep_after_sort = 1,
@@ -41,7 +42,7 @@ end
 function Storage:get_all_stackable_items()
     local all = {}
     for _, inv in pairs(inventories) do
-        local inv_items = windower.ffxi.get_items(inv.name)
+        local inv_items = windower.ffxi.get_items(inv.id)
         if not inv_items then
             log("Skipping inaccessible bag: " .. inv.name)
         else
@@ -59,12 +60,31 @@ function Storage:get_all_stackable_items()
     return all
 end
 
+--- Gets all items from your inventories
+---@return Item[]
+function Storage:get_all_items()
+    local all = {}
+    for _, inv in pairs(inventories) do
+        local inv_items = windower.ffxi.get_items(inv.id)
+        if not inv_items then
+            log("Skipping inaccessible bag: " .. inv.name)
+        else
+            for _, item in ipairs(inv_items) do
+                if item.id and item.id ~= 0 then
+                    table.insert(all, Item:new(item.id, item.slot, item.count, inv.id))
+                end
+            end
+        end
+    end
+
+    return all
+end
+
 function Storage:get_available_space_excluding_bags(excluding_bag_ids)
     if excluding_bag_ids == nil then
         excluding_bag_ids = {}
     end
 
-    -- TODO does lua have a set type?
     local exclude = {}
     for _, bag_id in pairs(excluding_bag_ids) do
         exclude[bag_id] = true

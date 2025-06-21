@@ -1,11 +1,16 @@
 _addon.name = 'StackConsolidator'
 _addon.author = 'Vafilor'
 _addon.version = '1.1'
-_addon.commands = { 'stack' }
+_addon.commands = { 'stack', 'list' }
 _addon.windower = '4'
 
 local Storage = require("storage")
 local message = require("message")
+
+local Spells = require("spells")
+local Jobs = require("jobs")
+local res = require('resources')
+
 
 require("logger")
 
@@ -100,6 +105,43 @@ local function print_stats()
     end
 end
 
+---@param flag string
+---@param job_name string?
+local function list_items_with_flag_or_category(flag, job_name)
+    local job_id = nil
+
+    if flag == "Scroll" then
+        Jobs.initialize()
+        Spells.load_cache()
+
+        if job_name then
+            job_id = Jobs.get_id_for_name(job_name)
+        end
+    end
+
+    local inventory = Storage:new(true)
+
+    for _, item in pairs(inventory:get_all_items()) do
+        local valid = item:has_flag(flag) or item:has_category(flag)
+        if valid and job_id ~= nil then
+            local spell = Spells.get_for_name(item.name)
+
+            if spell then
+                valid = Spells.can_learn(spell, job_id)
+            else
+                -- We're looking for a specific job
+                valid = false
+            end
+        end
+
+        if valid then
+            message(inventory.inventory[item.bag_id].name .. ": " .. item.name)
+        end
+    end
+
+    message("Done")
+end
+
 windower.register_event('addon command', function(cmd, ...)
     message(cmd)
 
@@ -108,8 +150,22 @@ windower.register_event('addon command', function(cmd, ...)
     local real_run = args:contains("--run")
 
     if cmd == 'items' then
-        stack_items(not real_run)
+        coroutine.schedule(function()
+            stack_items(not real_run)
+        end, 0)
     elseif cmd == "stats" then
         print_stats()
+    elseif cmd == "list" then
+        if args[1] == nil then
+            message("Need a flag or category.")
+            message("//inv list Scroll")
+            message("//inv list Weapon")
+            message("If using Scroll, you can provide a Job after that to restrict Scrolls learnable by that job")
+            message("//inv list Scroll whm")
+        else
+            coroutine.schedule(function()
+                list_items_with_flag_or_category(args[1], args[2])
+            end, 0)
+        end
     end
 end)
