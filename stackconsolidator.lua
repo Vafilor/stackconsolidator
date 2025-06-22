@@ -1,7 +1,7 @@
 _addon.name = 'StackConsolidator'
 _addon.author = 'Vafilor'
 _addon.version = '1.1'
-_addon.commands = { 'stack', 'list' }
+_addon.commands = { 'stack', 'list', 'find', 'suggest' }
 _addon.windower = '4'
 
 local Storage = require("storage")
@@ -9,8 +9,10 @@ local message = require("message")
 
 local Spells = require("spells")
 local Jobs = require("jobs")
+local res_bags = require("resources").bags
+local res_items = require("resources").items
 
-
+require("strings")
 require("logger")
 
 
@@ -109,9 +111,35 @@ local function print_stats()
     end
 end
 
+local function list_item_stacks()
+    for _, bag in pairs(res_bags) do
+        local items = windower.ffxi.get_items(bag.id)
+        if not items then
+            message("Skipping inaccessible bag: " .. bag.name)
+        else
+            for _, item in ipairs(items) do
+                print(item.count)
+                -- Don't list items that have a stack of 1
+                if item.count > 1 then
+                    local res_item = res_items[item.id]
+                    if res_item ~= nil and res_item.stack == item.count then
+                        message(string.format("%d %s in %s slot: %d", item.count, res_item.name, bag.name, item.slot))
+                    end
+                end
+            end
+        end
+    end
+
+    message("Done")
+end
+
 ---@param flag string
 ---@param job_name string?
-local function list_items_with_flag_or_category(flag, job_name)
+local function list_items(flag, job_name)
+    if flag:lower() == "stacks" then
+        list_item_stacks()
+        return
+    end
     local job_id = nil
 
     if flag == "Scroll" then
@@ -163,7 +191,7 @@ local function make_suggestions()
     if #crystals > 0 then
         message("Give Crystals / Crystal clusters to Ephemeral Moogle")
         for _, item in pairs(crystals) do
-            message(string.format("%2d %s in %s slot %d", item.count, item.name, inventory.inventory[item.bag_id].name,
+            message(string.format("  %2d %s in %s slot %d", item.count, item.name, inventory.inventory[item.bag_id].name,
                 item.slot))
         end
     end
@@ -171,7 +199,7 @@ local function make_suggestions()
     if #equipment > 0 then
         message("Move equipment to Mog Wardrobe")
         for _, item in pairs(equipment) do
-            message(string.format("%s in %s slot %d", item.name, inventory.inventory[item.bag_id].name,
+            message(string.format("   %s in %s slot %d", item.name, inventory.inventory[item.bag_id].name,
                 item.slot))
         end
     end
@@ -179,16 +207,35 @@ local function make_suggestions()
     message("Done")
 end
 
+-- Looks through all inventories and prints all items that have a name similar to the given name. Case insensitive
+---@param name string
+local function find_items(name)
+    local lower_name = name:lower()
+    for _, bag in pairs(res_bags) do
+        local items = windower.ffxi.get_items(bag.id)
+        if not items then
+            message("Skipping inaccessible bag: " .. bag.name)
+        else
+            for _, item in ipairs(items) do
+                local res_item = res_items[item.id]
+                if res_item ~= nil and res_item.name:lower():contains(lower_name) then
+                    message(string.format("%s in %s slot: %d", res_item.name, bag.name, item.slot))
+                end
+            end
+        end
+    end
+end
+
 windower.register_event('addon command', function(cmd, ...)
     message(cmd)
 
     local args = T { ... }
 
-    local real_run = args:contains("--run")
-
     if cmd == 'items' then
+        local dry_run = args:contains("--dry-run")
+        local debug = args:contains("--debug")
         coroutine.schedule(function()
-            stack_items(not real_run, true)
+            stack_items(dry_run, debug)
         end, 0)
     elseif cmd == "stats" then
         print_stats()
@@ -201,10 +248,19 @@ windower.register_event('addon command', function(cmd, ...)
             message("//inv list Scroll whm")
         else
             coroutine.schedule(function()
-                list_items_with_flag_or_category(args[1], args[2])
+                list_items(args[1], args[2])
             end, 0)
         end
     elseif cmd == "suggest" then
         coroutine.schedule(make_suggestions, 0)
+    elseif cmd == "find" then
+        if args[1] == nil then
+            message("Need an item name")
+            message("//inv find fire crystal")
+        else
+            coroutine.schedule(function()
+                find_items(args:concat(" "))
+            end, 0)
+        end
     end
 end)
