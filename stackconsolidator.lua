@@ -1,6 +1,7 @@
 _addon.name = 'StackConsolidator'
 _addon.author = 'Vafilor'
 _addon.version = '1.1'
+_addon.command = 'inv'
 _addon.commands = { 'stack', 'list', 'find', 'suggest' }
 _addon.windower = '4'
 
@@ -227,8 +228,6 @@ local function find_items(name)
 end
 
 windower.register_event('addon command', function(cmd, ...)
-    message(cmd)
-
     local args = T { ... }
 
     if cmd == 'items' then
