@@ -10,14 +10,14 @@ local id = {
 }
 
 local inventories = {
-    [id.INVENTORY] = { id = id.INVENTORY, name = 'inventory' },
-    [id.SAFE] = { id = id.SAFE, name = 'safe' },
-    [id.STORAGE] = { id = id.STORAGE, name = 'storage' },
-    [id.LOCKER] = { id = id.LOCKER, name = 'locker' },
-    [id.SATCHEL] = { id = id.SATCHEL, name = 'satchel' },
-    [id.SACK] = { id = id.SACK, name = 'sack' },
-    [id.CASE] = { id = id.CASE, name = 'case' },
-    [id.SAFE_2] = { id = id.SAFE_2, name = 'safe2' }
+    [id.INVENTORY] = { id = id.INVENTORY, name = 'inventory', mog_house_only = false },
+    [id.SAFE] = { id = id.SAFE, name = 'safe', mog_house_only = true },
+    [id.STORAGE] = { id = id.STORAGE, name = 'storage', mog_house_only = true },
+    [id.LOCKER] = { id = id.LOCKER, name = 'locker', mog_house_only = true },
+    [id.SATCHEL] = { id = id.SATCHEL, name = 'satchel', mog_house_only = false },
+    [id.SACK] = { id = id.SACK, name = 'sack', mog_house_only = false },
+    [id.CASE] = { id = id.CASE, name = 'case', mog_house_only = false },
+    [id.SAFE_2] = { id = id.SAFE_2, name = 'safe2', mog_house_only = true }
 }
 
 local equipment = {

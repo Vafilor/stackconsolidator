@@ -15,20 +15,31 @@ local inventories = constants.inventories
 ---@field sleep_between_move_and_sort number
 ---@field sleep_after_sort number
 ---@field dry_run boolean
+---@field linkshell_slot integer
+---@field player_equipment table
+---@field debug boolean
 Storage = {}
 
+---@param in_mog_house boolean if false, restricts the inventories to those available outside the mog house. Otherwise all of them.
 ---@return Storage
-function Storage:new(dry_run)
+function Storage:new(in_mog_house)
     local obj = {
         -- TODO rename these to bags
         inventory = {},
         sleep_between_move_and_sort = 1,
         sleep_after_sort = 1,
-        dry_run = dry_run
+        dry_run = false,
+        debug = false,
+        in_mog_house = in_mog_house,
+        linkshell_slot = windower.ffxi.get_player().linkshell_slot,
+        player_equipment = windower.ffxi.get_items("equipment"),
+        temp_prefix = "   "
     }
 
     for _, inv in pairs(inventories) do
-        obj.inventory[inv.id] = Bag:new(inv.id)
+        if not inv.mog_house_only or (obj.in_mog_house and inv.mog_house_only) then
+            obj.inventory[inv.id] = Bag:new(inv.id)
+        end
     end
 
     setmetatable(obj, self)
@@ -41,7 +52,7 @@ end
 ---@return Item[]
 function Storage:get_all_stackable_items()
     local all = {}
-    for _, inv in pairs(inventories) do
+    for _, inv in pairs(self.inventory) do
         local inv_items = windower.ffxi.get_items(inv.id)
         if not inv_items then
             log("Skipping inaccessible bag: " .. inv.name)
@@ -60,11 +71,11 @@ function Storage:get_all_stackable_items()
     return all
 end
 
---- Gets all items from your inventories
+--- Gets all items from all of your avaiable inventories
 ---@return Item[]
 function Storage:get_all_items()
     local all = {}
-    for _, inv in pairs(inventories) do
+    for _, inv in pairs(self.inventory) do
         local inv_items = windower.ffxi.get_items(inv.id)
         if not inv_items then
             log("Skipping inaccessible bag: " .. inv.name)
@@ -80,27 +91,8 @@ function Storage:get_all_items()
     return all
 end
 
-function Storage:get_available_space_excluding_bags(excluding_bag_ids)
-    if excluding_bag_ids == nil then
-        excluding_bag_ids = {}
-    end
-
-    local exclude = {}
-    for _, bag_id in pairs(excluding_bag_ids) do
-        exclude[bag_id] = true
-    end
-
-
-    local space_available = 0
-    for _, inventory in pairs(self.inventory) do
-        if not exclude[inventory.id] then
-            space_available = space_available + inventory.space
-        end
-    end
-
-    return space_available
-end
-
+---@param exclude_bag_ids table?
+---@param min_space integer
 function Storage:get_cache_bag(exclude_bag_ids, min_space)
     if exclude_bag_ids == nil then
         exclude_bag_ids = {}
@@ -121,11 +113,19 @@ function Storage:get_cache_bag(exclude_bag_ids, min_space)
     return nil
 end
 
----@param item_slot integer
+---@param item Item
 ---@param count integer
 ---@param source_bag Bag
 ---@param target_bag Bag
-function Storage:perform_move(item_slot, count, source_bag, target_bag)
+---@param prefix string? debug message to prefix, if any
+function Storage:perform_move(item, count, source_bag, target_bag, prefix)
+    if self.debug then
+        if prefix == nil then
+            prefix = ""
+        end
+        message(string.format("%sMoving %d %s from %s to %s", prefix, count, item.name, source_bag.name, target_bag.name))
+    end
+
     if self.dry_run then
         return
     end
@@ -134,7 +134,7 @@ function Storage:perform_move(item_slot, count, source_bag, target_bag)
         ["Count"] = count,
         ["Bag"] = source_bag.id,
         ["Target Bag"] = target_bag.id,
-        ["Current Index"] = item_slot,
+        ["Current Index"] = item.slot,
         ["Target Index"] = 0x52
     })
 
@@ -142,13 +142,7 @@ function Storage:perform_move(item_slot, count, source_bag, target_bag)
 
     coroutine.sleep(self.sleep_between_move_and_sort)
 
-    local packet = packets.new('outgoing', 0x03A, {
-        ["Bag"] = target_bag.id,
-        ["_unknown1"] = 0,
-        ["_unknown2"] = 0
-    })
-
-    packets.inject(packet)
+    target_bag:server_sort()
 
     coroutine.sleep(self.sleep_after_sort)
 
@@ -180,63 +174,124 @@ function Storage:move(item, count, bag_id)
 
 
     message(string.format("Moving %d %s from %s to %s", count, item.name, source_bag.name, target_bag.name))
-
-    -- Case 2: Move from player's inventory to a different bag.
-    if source_bag:is(ids.INVENTORY) then
-        if target_bag:has_free_slot() then
-            self:perform_move(item.slot, count, source_bag, target_bag)
-            return true
-        end
-
-        message(string.format("Unable to move %d %s from %s to %s. No space in %s", count,
-            item.name, source_bag.name,
-            target_bag.name, target_bag.name))
-        -- TODO handle this case
-        return false
-    end
-
-    -- TODO you don't always need to sort after. Remove when you don't, save some time.
-
-    -- Case 3: Move from a bag to another bag
-    -- First we have to move it to the inventory
-    -- then to the target bag
-    if not source_bag:is(ids.INVENTORY) and not target_bag:is(ids.INVENTORY) then
-        if not inventory_bag:has_free_slot() then
-            message(string.format(
-                "Unable to move %d %s from %s to %s. No space in inventory which acts as an intermediate", count,
-                item.name, source_bag.name,
-                target_bag.name))
-
-            return false
-        end
-
-        if not target_bag:has_free_slot() then
-            message(string.format("Unable to move %d %s from %s to %s. No space in %s", count,
-                item.name, source_bag.name,
-                target_bag.name))
-            return false
-        end
-
-        self:perform_move(item.slot, count, source_bag, inventory_bag)
-
-        if self.dry_run then
-            return true
-        end
-
-        local moved_item = inventory_bag:get_item(item.id)
-        if moved_item == nil then
-            message(string.format("Unable to move %d %s from %s to %s. Unable to find item", count,
-                item.name, inventory_bag.name,
-                target_bag.name))
-            return false
-        end
-
-        self:perform_move(moved_item.slot, count, inventory_bag, target_bag)
-
+    if self.dry_run then
         return true
     end
 
-    return false
+    local temp_moves = {}
+
+    -- Move to inventory first
+    if not source_bag:is(ids.INVENTORY) then
+        if not inventory_bag:has_free_slot() then
+            local cache_bag = self:get_cache_bag({ ids.INVENTORY }, 1)
+            if not cache_bag then
+                if self.debug then
+                    message(
+                        "Temporarily moving to inventory, inventory has no free slot and no suitable bag found to move to")
+                end
+                return false
+            end
+
+            local random_item = inventory_bag:get_random_movable_item(self.linkshell_slot, self.player_equipment)
+            if not random_item then
+                if self.debug then
+                    message("Unable to get a movable item from the inventory to temporarily move")
+                end
+                return false
+            end
+
+            table.insert(temp_moves, {
+                item = random_item,
+                from_bag = inventory_bag,
+                to_bag = cache_bag
+            })
+            self:perform_move(random_item, random_item.count, inventory_bag, cache_bag, self.temp_prefix)
+        end
+
+        self:perform_move(item, count, source_bag, inventory_bag, self.temp_prefix)
+    end
+
+    -- At this point, we are moving from the inventory to a target bag
+
+    -- Here we need to make sure the target bag has a slot
+    if not target_bag:has_free_slot() then
+        if not inventory_bag:has_free_slot() then
+            local cache_bag = self:get_cache_bag({ ids.INVENTORY }, 1)
+            if not cache_bag then
+                if self.debug then
+                    message(target_bag.name .. " has no free slot, neither does inventory and no suitable space found")
+                end
+                return false
+            end
+
+            local random_item = inventory_bag:get_random_movable_item(self.linkshell_slot, self.player_equipment,
+                item.id)
+            if not random_item then
+                if self.debug then
+                    message(target_bag.name ..
+                        " has no space, neither does inventory. Unable to get a movable item from the inventory.")
+                end
+                return false
+            end
+
+            table.insert(temp_moves, {
+                item = random_item,
+                from_bag = inventory_bag,
+                to_bag = cache_bag
+            })
+            self:perform_move(random_item, random_item.count, inventory_bag, cache_bag, self.temp_prefix)
+        end
+
+        -- move a random item to the inventory
+        local random_item = target_bag:get_random_movable_item(self.linkshell_slot, self.player_equipment)
+        if not random_item then
+            message("Unable to get a movable item from the target bag " .. target_bag.name)
+            return false
+        end
+
+        table.insert(temp_moves, {
+            item = random_item,
+            from_bag = target_bag,
+            to_bag = inventory_bag
+        })
+        self:perform_move(random_item, random_item.count, target_bag, inventory_bag, self.temp_prefix)
+    end
+
+
+    -- We need to get the slot the item is now in
+    local item_in_inventory = inventory_bag:get_item(item.id, item.count)
+    if not item_in_inventory then
+        if self.debug then
+            message("Item should have been moved to inventory, but it is not found.")
+        end
+        return false
+    end
+
+    self:perform_move(item_in_inventory, item_in_inventory.count, inventory_bag, target_bag, self.temp_prefix)
+
+    local unwind_moves = #temp_moves
+    if self.debug and unwind_moves ~= 0 then
+        message(self.temp_prefix .. "Unwinding")
+    end
+
+    -- Now unwind the moves
+    while #temp_moves > 0 do
+        local last_move = table.remove(temp_moves)
+
+        local item_in_target = last_move.to_bag:get_item(last_move.item.id)
+        if not item_in_target then
+            if self.debug then
+                message(last_move.item.name .. " should have been moved to target, but it is not found.")
+            end
+            return false
+        end
+
+        self:perform_move(item_in_target, item_in_target.count, last_move.to_bag,
+            last_move.from_bag, self.temp_prefix .. self.temp_prefix)
+    end
+
+
+    return true
 end
 
 return Storage

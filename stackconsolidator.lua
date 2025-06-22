@@ -43,8 +43,10 @@ end
 -- It will move 49 to mog safe and 6 to mog safe 2.
 -- It does not attempt to organize like items together.
 -- However, it does skip moving things to the player inventory.
-local function stack_items(dry_run)
-    local inventory = Storage:new(dry_run)
+local function stack_items(dry_run, debug)
+    local inventory = Storage:new(windower.ffxi.get_info().mog_house)
+    inventory.dry_run = dry_run
+    inventory.debug = debug
 
     message("Starting stacking items")
     local total_moved = 0
@@ -100,7 +102,7 @@ end
 
 local function print_stats()
     message("        Stats      ")
-    local inventory = Storage:new(false)
+    local inventory = Storage:new(true)
 
     for _, inv in pairs(inventory.inventory) do
         message(string.format("%-10s %4s %4s", inv.name, tostring(inv.count), tostring(inv.max)))
@@ -137,7 +139,40 @@ local function list_items_with_flag_or_category(flag, job_name)
         end
 
         if valid then
-            message(inventory.inventory[item.bag_id].name .. ": " .. item.name)
+            message(inventory.inventory[item.bag_id].name .. ": " .. item.name .. " slot " .. tostring(item.slot))
+        end
+    end
+
+    message("Done")
+end
+
+local function make_suggestions()
+    local inventory = Storage:new(true)
+
+    local crystals = {}
+    local equipment = {}
+
+    for _, item in pairs(inventory:get_all_items()) do
+        if item:is_crystal() then
+            table.insert(crystals, item)
+        elseif item:is_equpiment() then
+            table.insert(equipment, item)
+        end
+    end
+
+    if #crystals > 0 then
+        message("Give Crystals / Crystal clusters to Ephemeral Moogle")
+        for _, item in pairs(crystals) do
+            message(string.format("%2d %s in %s slot %d", item.count, item.name, inventory.inventory[item.bag_id].name,
+                item.slot))
+        end
+    end
+
+    if #equipment > 0 then
+        message("Move equipment to Mog Wardrobe")
+        for _, item in pairs(equipment) do
+            message(string.format("%s in %s slot %d", item.name, inventory.inventory[item.bag_id].name,
+                item.slot))
         end
     end
 
@@ -153,7 +188,7 @@ windower.register_event('addon command', function(cmd, ...)
 
     if cmd == 'items' then
         coroutine.schedule(function()
-            stack_items(not real_run)
+            stack_items(not real_run, true)
         end, 0)
     elseif cmd == "stats" then
         print_stats()
@@ -169,5 +204,7 @@ windower.register_event('addon command', function(cmd, ...)
                 list_items_with_flag_or_category(args[1], args[2])
             end, 0)
         end
+    elseif cmd == "suggest" then
+        coroutine.schedule(make_suggestions, 0)
     end
 end)
