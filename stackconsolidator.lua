@@ -237,6 +237,8 @@ end
 -- Looks through all inventories and prints all items that have a name similar to the given name. Case insensitive
 ---@param name string
 local function find_items(name)
+    local items_found = 0
+
     local lower_name = name:lower()
     for _, bag in pairs(res_bags) do
         local items = windower.ffxi.get_items(bag.id)
@@ -247,9 +249,20 @@ local function find_items(name)
                 local res_item = res_items[item.id]
                 if res_item ~= nil and res_item.name:lower():contains(lower_name) then
                     message(string.format("%s in %s slot: %d", res_item.name, bag.name, item.slot))
+                    items_found = items_found + 1
                 end
             end
         end
+    end
+
+    if items_found == 0 then
+        message("No items found for '" .. name .. "'")
+    else
+        local word = "item"
+        if items_found > 1 then
+            word = "items"
+        end
+        message(string.format("%d %s found", items_found, word))
     end
 end
 
