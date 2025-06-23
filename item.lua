@@ -96,7 +96,7 @@ end
 
 ---@return boolean
 function Item:is_equpiment()
-    return self.res.category == "Armor" or self.res.category == "Armor"
+    return self.res.category == "Armor" or self.res.category == "Weapon"
 end
 
 ---@param linkshell_slot integer? The slot the player has their linkshell in, if any. Obtained from windower.ffxi.get_player().linkshell_slot

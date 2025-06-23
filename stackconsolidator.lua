@@ -218,16 +218,14 @@ local function make_suggestions()
     if #crystals > 0 then
         message("Give Crystals / Crystal clusters to Ephemeral Moogle")
         for _, item in pairs(crystals) do
-            message(string.format("  %2d %s in %s slot %d", item.count, item.name, inventory.inventory[item.bag_id].name,
-                item.slot))
+            message(string.format("  %2d %s in %s", item.count, item.name, inventory.inventory[item.bag_id].name))
         end
     end
 
     if #equipment > 0 then
         message("Move equipment to Mog Wardrobe")
         for _, item in pairs(equipment) do
-            message(string.format("   %s in %s slot %d", item.name, inventory.inventory[item.bag_id].name,
-                item.slot))
+            message(string.format("   %s in %s", item.name, inventory.inventory[item.bag_id].name))
         end
     end
 
@@ -248,7 +246,7 @@ local function find_items(name)
             for _, item in ipairs(items) do
                 local res_item = res_items[item.id]
                 if res_item ~= nil and res_item.name:lower():contains(lower_name) then
-                    message(string.format("%s in %s slot: %d", res_item.name, bag.name, item.slot))
+                    message(string.format("%s in %s", res_item.name, bag.name))
                     items_found = items_found + 1
                 end
             end

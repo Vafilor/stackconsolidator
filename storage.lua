@@ -198,7 +198,6 @@ function Storage:move(item, count, bag_id)
         return false
     end
 
-
     message(string.format("Moving %d %s from %s to %s", count, item.name, source_bag.name, target_bag.name))
     if self.dry_run then
         return true
