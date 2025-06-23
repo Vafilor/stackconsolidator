@@ -276,7 +276,7 @@ windower.register_event('addon command', function(cmd, ...)
             stack_items(dry_run, debug)
         end, 0)
     elseif cmd == "stats" then
-        coroutine.schedule(print_stats)
+        coroutine.schedule(print_stats, 0)
     elseif cmd == "list" then
         if args[1] == nil then
             message("Need a flag or category.")
